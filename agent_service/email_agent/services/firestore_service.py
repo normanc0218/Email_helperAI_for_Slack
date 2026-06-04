@@ -2,12 +2,16 @@
 Firestore data layer — manages two collections:
   email_summaries  — one doc per email, keyed by email_id
   email_groups     — one doc per project group, keyed by group_id
+
+All email_groups reads and writes are scoped to a user_id so that multiple
+users' groups never pollute each other's KNN vector index.
 """
 import os
 import uuid
 from datetime import datetime, timezone
 
 from google.cloud import firestore
+from google.cloud.firestore_v1.base_query import FieldFilter
 from google.cloud.firestore_v1.base_vector_query import DistanceMeasure
 from google.cloud.firestore_v1.vector import Vector
 
@@ -67,8 +71,8 @@ def mark_email_processed(
     }, merge=True)
 
 
-def list_group_details() -> list[dict]:
-    groups = {g["group_id"]: {**g, "emails": []} for g in list_groups()}
+def list_group_details(user_id: str = "cli") -> list[dict]:
+    groups = {g["group_id"]: {**g, "emails": []} for g in list_groups(user_id)}
     summaries = _db().collection(SUMMARIES).stream()
     for snap in summaries:
         s = snap.to_dict()
@@ -105,9 +109,10 @@ def get_processed_email_ids(email_ids: list[str]) -> set[str]:
 
 # ── email_groups ──────────────────────────────────────────────────────────────
 
-def save_group(doc: dict) -> str:
+def save_group(doc: dict, user_id: str = "cli") -> str:
+    """Save a new group doc, stamping user_id so queries stay per-user."""
     group_id = doc.get("group_id") or uuid.uuid4().hex[:8]
-    doc = {**doc, "group_id": group_id}
+    doc = {**doc, "group_id": group_id, "user_id": user_id}
     if "embedding" in doc and not isinstance(doc["embedding"], Vector):
         doc["embedding"] = Vector(doc["embedding"])
     if "created_at" not in doc:
@@ -132,15 +137,20 @@ def update_group(group_id: str, updates: dict) -> None:
     _db().collection(GROUPS).document(group_id).update(updates)
 
 
-def list_groups() -> list[dict]:
-    docs = _db().collection(GROUPS).stream()
+def list_groups(user_id: str = "cli") -> list[dict]:
+    """Return all groups belonging to this user."""
+    docs = (
+        _db().collection(GROUPS)
+        .where(filter=FieldFilter("user_id", "==", user_id))
+        .stream()
+    )
     return [_strip_vector(d.to_dict()) for d in docs]
 
 
-def find_group_by_thread_id(thread_id: str) -> dict | None:
-    from google.cloud.firestore_v1.base_query import FieldFilter
+def find_group_by_thread_id(thread_id: str, user_id: str = "cli") -> dict | None:
     docs = list(
         _db().collection(GROUPS)
+        .where(filter=FieldFilter("user_id", "==", user_id))
         .where(filter=FieldFilter("thread_ids", "array_contains", thread_id))
         .limit(1)
         .get()
@@ -150,10 +160,19 @@ def find_group_by_thread_id(thread_id: str) -> dict | None:
     return _strip_vector(docs[0].to_dict())
 
 
-def find_nearest_group(embedding: list[float], limit: int = 1) -> dict | None:
+def find_nearest_group(
+    embedding: list[float],
+    user_id: str = "cli",
+    limit: int = 1,
+) -> dict | None:
+    """KNN search scoped to this user's groups.
+
+    Requires a Firestore composite index on (user_id ASC, embedding VECTOR).
+    """
     results = (
         _db()
         .collection(GROUPS)
+        .where(filter=FieldFilter("user_id", "==", user_id))
         .find_nearest(
             vector_field="embedding",
             query_vector=Vector(embedding),
@@ -172,11 +191,16 @@ def find_nearest_group(embedding: list[float], limit: int = 1) -> dict | None:
     return _strip_vector(data)
 
 
-def find_nearest_group_top_k(embedding: list[float], k: int = 3) -> list[dict]:
-    """Return up to k nearest groups by cosine similarity, each with a similarity field."""
+def find_nearest_group_top_k(
+    embedding: list[float],
+    user_id: str = "cli",
+    k: int = 3,
+) -> list[dict]:
+    """Return up to k nearest groups by cosine similarity, scoped to this user."""
     results = (
         _db()
         .collection(GROUPS)
+        .where(filter=FieldFilter("user_id", "==", user_id))
         .find_nearest(
             vector_field="embedding",
             query_vector=Vector(embedding),

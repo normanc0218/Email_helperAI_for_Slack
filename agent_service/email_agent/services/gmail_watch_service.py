@@ -206,6 +206,7 @@ def process_push_notification(payload: dict) -> dict:
                     email_ids=[email["id"]],
                     sender=email["from"],
                     thread_id=email["thread_id"],
+                    user_id="cli",
                 )
                 mark_email_processed(
                     email_id=email["id"],
@@ -256,6 +257,7 @@ def process_push_notification(payload: dict) -> dict:
                     email_ids=[msg_id],
                     sender=headers.get("From", ""),
                     thread_id=detail.get("threadId", ""),
+                    user_id="cli",
                 )
                 mark_email_processed(
                     email_id=msg_id,

@@ -17,6 +17,15 @@ from google.adk.tools import ToolContext
 
 logger = logging.getLogger(__name__)
 
+
+def _get_user_id(tool_context=None) -> str:
+    if tool_context is not None:
+        pg_id = getattr(tool_context, "state", {}).get("pg_user_id")
+        if pg_id is not None:
+            return str(pg_id)
+    return "cli"
+
+
 # Matches common industrial/product codes: S7-1500, VFD-750, ET200SP, CPU-315, IM-153
 _ENTITY_RE = re.compile(
     r'\b('
@@ -71,7 +80,8 @@ def get_existing_groups(tool_context: ToolContext = None) -> dict:
         Dict with count and list of {name, description, email_count}.
     """
     from ..services.firestore_service import list_group_details
-    groups = list_group_details()
+    user_id = _get_user_id(tool_context)
+    groups = list_group_details(user_id)
     return {
         "count": len(groups),
         "groups": [
@@ -114,7 +124,7 @@ def find_nearest_groups_for_email(email_id: str, tool_context: ToolContext = Non
             tool_context.state["_grouping_embeddings"] = emb_cache
 
     try:
-        candidates = find_nearest_group_top_k(emb_cache[email_id], k=3)
+        candidates = find_nearest_group_top_k(emb_cache[email_id], user_id=_get_user_id(tool_context), k=3)
     except Exception as exc:
         logger.warning("KNN search failed for %s: %s", email_id, exc)
         candidates = []

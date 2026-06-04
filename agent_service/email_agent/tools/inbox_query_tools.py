@@ -3,11 +3,20 @@ Inbox query tools — read-only views over Firestore for answering user question
 about their organised email (group counts, summaries, email lists, etc.).
 """
 import logging
+from google.adk.tools import ToolContext
 
 logger = logging.getLogger(__name__)
 
 
-def get_inbox_stats() -> dict:
+def _get_user_id(tool_context=None) -> str:
+    if tool_context is not None:
+        pg_id = getattr(tool_context, "state", {}).get("pg_user_id")
+        if pg_id is not None:
+            return str(pg_id)
+    return "cli"
+
+
+def get_inbox_stats(tool_context: ToolContext = None) -> dict:
     """Return a full snapshot of the user's organised inbox from Firestore.
 
     Covers:
@@ -20,7 +29,7 @@ def get_inbox_stats() -> dict:
     """
     from ..services.firestore_service import list_groups, _db, SUMMARIES
 
-    groups = list_groups()
+    groups = list_groups(_get_user_id(tool_context))
     total_emails = sum(g.get("email_count", 0) for g in groups)
 
     return {
@@ -39,7 +48,7 @@ def get_inbox_stats() -> dict:
     }
 
 
-def get_group_emails(group_name: str) -> dict:
+def get_group_emails(group_name: str, tool_context: ToolContext = None) -> dict:
     """Return emails belonging to a specific group, looked up by name.
 
     Args:
@@ -51,7 +60,7 @@ def get_group_emails(group_name: str) -> dict:
     from ..services.firestore_service import list_groups, _db, SUMMARIES
     from google.cloud.firestore_v1.base_query import FieldFilter
 
-    groups = list_groups()
+    groups = list_groups(_get_user_id(tool_context))
     name_lower = group_name.lower()
     matched = [g for g in groups if name_lower in g.get("name", "").lower()]
 

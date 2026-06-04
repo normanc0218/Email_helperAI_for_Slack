@@ -105,8 +105,14 @@ class GmailProvider(EmailProvider):
     TOKEN_FILE = "gmail_token.json"
     SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
 
-    def __init__(self) -> None:
+    def __init__(self, user_id: int | None = None) -> None:
+        """
+        user_id: Postgres User.id — when set, credentials are loaded from the
+                 Postgres OAuthToken table (web app path).
+                 When None, falls back to gmail_token.json (CLI / Slack path).
+        """
         self._service = None
+        self._pg_user_id = user_id
 
     # ── internal ──────────────────────────────────────────────────────────────
 
@@ -114,8 +120,42 @@ class GmailProvider(EmailProvider):
         if self._service:
             return self._service
 
-        from google.oauth2.credentials import Credentials
         from googleapiclient.discovery import build
+
+        creds = self._load_credentials()
+
+        # Refresh proactively if expired
+        if creds.expired and creds.refresh_token:
+            from google.auth.transport.requests import Request
+            creds.refresh(Request())
+            # Persist refreshed token back to the appropriate store
+            if self._pg_user_id is not None:
+                self._save_refreshed_pg_token(creds)
+            else:
+                self._save_refreshed_file_token(creds)
+
+        self._service = build("gmail", "v1", credentials=creds)
+        return self._service
+
+    def _load_credentials(self):
+        """Load credentials from Postgres (web app) or file (CLI/Slack)."""
+        if self._pg_user_id is not None:
+            return self._load_pg_credentials()
+        return self._load_file_credentials()
+
+    def _load_pg_credentials(self):
+        """Load credentials from Postgres OAuthToken for this user."""
+        from app.db.database import SessionLocal as PgSession
+        from app.auth.token_store import get_credentials
+        db = PgSession()
+        try:
+            return get_credentials(db, self._pg_user_id)
+        finally:
+            db.close()
+
+    def _load_file_credentials(self):
+        """Load credentials from gmail_token.json (legacy / CLI path)."""
+        from google.oauth2.credentials import Credentials
 
         if not os.path.exists(self.TOKEN_FILE):
             raise RuntimeError("Gmail not authenticated. Visit GET /auth/login to authorise.")
@@ -131,11 +171,10 @@ class GmailProvider(EmailProvider):
             client_id = web.get("client_id")
             client_secret = web.get("client_secret")
         else:
-            # Fall back to env vars, then to values already stored in the token file
             client_id = os.getenv("GMAIL_CLIENT_ID") or data.get("client_id")
             client_secret = os.getenv("GMAIL_CLIENT_SECRET") or data.get("client_secret")
 
-        creds = Credentials(
+        return Credentials(
             token=data.get("token"),
             refresh_token=data.get("refresh_token"),
             token_uri="https://oauth2.googleapis.com/token",
@@ -144,21 +183,26 @@ class GmailProvider(EmailProvider):
             scopes=self.SCOPES,
         )
 
-        # Refresh proactively if expired, then persist the new token to disk
-        # so the next startup doesn't hit a 401.
-        if creds.expired and creds.refresh_token:
-            from google.auth.transport.requests import Request
-            creds.refresh(Request())
-            with open(self.TOKEN_FILE, "w") as fh:
-                json.dump({
-                    "token": creds.token,
-                    "refresh_token": creds.refresh_token,
-                    "client_id": client_id,
-                    "client_secret": client_secret,
-                }, fh)
+    def _save_refreshed_pg_token(self, creds) -> None:
+        from app.db.database import SessionLocal as PgSession
+        from app.db.models import User as PgUser
+        from app.auth.token_store import save_token
+        db = PgSession()
+        try:
+            user = db.query(PgUser).filter(PgUser.id == self._pg_user_id).first()
+            if user:
+                save_token(db, user, creds)
+        finally:
+            db.close()
 
-        self._service = build("gmail", "v1", credentials=creds)
-        return self._service
+    def _save_refreshed_file_token(self, creds) -> None:
+        with open(self.TOKEN_FILE, "w") as fh:
+            json.dump({
+                "token": creds.token,
+                "refresh_token": creds.refresh_token,
+                "client_id": creds.client_id,
+                "client_secret": creds.client_secret,
+            }, fh)
 
     def _get_or_create_label(self, label_name: str) -> str:
         service = self._get_service()
@@ -470,15 +514,32 @@ class YahooProvider(EmailProvider):
 _provider_cache: dict[str, EmailProvider] = {}
 
 
-def get_email_provider() -> EmailProvider:
-    provider = os.getenv("EMAIL_PROVIDER", "gmail").lower()
-    if provider not in _provider_cache:
-        if provider == "gmail":
-            _provider_cache[provider] = GmailProvider()
-        elif provider == "yahoo":
-            _provider_cache[provider] = YahooProvider()
-        elif provider == "fake":
-            _provider_cache[provider] = FakeProvider()
+def get_email_provider(pg_user_id: int | None = None) -> EmailProvider:
+    """Return an EmailProvider for the given user.
+
+    pg_user_id: Postgres User.id for the web app path (loads token from DB).
+                None uses the legacy file/env-var path (CLI / Slack).
+
+    Web-app callers that pass pg_user_id get a fresh (uncached) GmailProvider
+    so each request uses the correct per-user credentials.
+    """
+    provider_name = os.getenv("EMAIL_PROVIDER", "gmail").lower()
+
+    # Per-user web-app path: never cache — each user needs their own provider
+    if pg_user_id is not None and provider_name == "gmail":
+        return GmailProvider(user_id=pg_user_id)
+
+    if provider_name not in _provider_cache:
+        if provider_name == "gmail":
+            _provider_cache[provider_name] = GmailProvider()
+        elif provider_name == "yahoo":
+            _provider_cache[provider_name] = YahooProvider()
+        elif provider_name == "fake":
+            _provider_cache[provider_name] = FakeProvider()
         else:
-            raise ValueError(f"Unknown EMAIL_PROVIDER: {provider!r}")
-    return _provider_cache[provider]
+            raise ValueError(f"Unknown EMAIL_PROVIDER: {provider_name!r}")
+    return _provider_cache[provider_name]
+
+
+# Alias used by existing tools / services that import get_provider
+get_provider = get_email_provider

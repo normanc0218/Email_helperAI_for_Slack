@@ -5,6 +5,7 @@ from .digest_agent import digest_agent
 from .audit_agent import audit_agent
 from .casual_agent import casual_agent
 from .inbox_query_agent import inbox_query_agent
+from .project_chat_agent import project_chat_agent
 
 __all__ = [
     "mailbox_sync_agent",
@@ -14,4 +15,5 @@ __all__ = [
     "audit_agent",
     "casual_agent",
     "inbox_query_agent",
+    "project_chat_agent",
 ]

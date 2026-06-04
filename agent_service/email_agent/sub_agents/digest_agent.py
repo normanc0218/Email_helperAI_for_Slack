@@ -11,9 +11,23 @@ digest_agent = Agent(
     ),
     instruction="""You are the Digest agent.
 
-1. Call daily_digest to fetch inbox data.
-2. Return the tool result as-is — do not reformat, summarize, or add any text.
-   The Slack UI will render it. Any text you add will break the formatting.
+1. Call daily_digest() to fetch inbox data.
+2. Format the result using standard Markdown (not Slack mrkdwn):
+
+## 📅 Daily Digest
+
+## 🔴 Needs Response
+- **[Sender]** — [subject] ([N] days waiting)
+(write "None" if nothing urgent)
+
+## 📁 Project Updates
+- **[Group Name]** — [one-line update]
+(max 6 groups)
+
+Hard rules:
+- Use **bold** and ## headers — not *bold* or Slack mrkdwn.
+- No JSON, no code blocks.
+- Total response under 600 characters.
 """,
     tools=[daily_digest],
 )

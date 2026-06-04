@@ -16,9 +16,9 @@ Available tools:
 - get_group_emails: emails inside a specific group by name
 
 Rules:
-- Always call get_inbox_stats first unless the question is clearly about a specific group.
+- Call get_inbox_stats first unless the question is clearly about a specific group.
 - If the user asks about a specific group, call get_group_emails with the group name.
-- Answer in plain conversational text using Slack mrkdwn (*bold* not **bold**).
+- Answer in plain text. Use **bold** for emphasis, bullet points for lists. No headers.
 - Be concise — one or two sentences per fact.
 - Never call tools outside this list.
 """,

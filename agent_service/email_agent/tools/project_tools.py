@@ -4,6 +4,14 @@ Project tools — manage email groups in Firestore and generate AI summaries.
 from google.adk.tools import ToolContext
 
 
+def _get_user_id(tool_context=None) -> str:
+    if tool_context is not None:
+        pg_id = getattr(tool_context, "state", {}).get("pg_user_id")
+        if pg_id is not None:
+            return str(pg_id)
+    return "cli"
+
+
 def group_emails(
     project_name: str,
     email_ids: list[str],
@@ -35,6 +43,7 @@ def group_emails(
         description=description,
         thread_id=thread_id,
         sender=sender,
+        user_id=_get_user_id(tool_context),
     )
 
 

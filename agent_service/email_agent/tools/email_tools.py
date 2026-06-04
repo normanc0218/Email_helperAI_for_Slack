@@ -16,6 +16,34 @@ logger = logging.getLogger(__name__)
 BATCH_SIZE = 20
 
 
+def _get_provider(tool_context=None):
+    """Return the correct EmailProvider for this request.
+
+    Reads pg_user_id from ADK session state (set by the web runner) to load
+    credentials from Postgres. Falls back to the file/env path for CLI/Slack.
+    """
+    from ..services.email_provider import get_email_provider
+    pg_user_id = None
+    if tool_context is not None:
+        state = getattr(tool_context, "state", None)
+        if state is not None:
+            pg_user_id = state.get("pg_user_id")
+    return get_email_provider(pg_user_id=pg_user_id)
+
+
+def _get_user_id(tool_context=None) -> str:
+    """Return the Firestore-scoped user_id for this request.
+
+    Uses pg_user_id from session state (web app) so each user's Firestore
+    groups stay isolated. Falls back to 'cli' for CLI/Slack usage.
+    """
+    if tool_context is not None:
+        pg_id = getattr(tool_context, "state", {}).get("pg_user_id")
+        if pg_id is not None:
+            return str(pg_id)
+    return "cli"
+
+
 def _sender_domain(sender: str) -> str:
     """Extract domain from a sender string like 'Alice <alice@github.com>'."""
     match = re.search(r"@([\w.\-]+)", sender)
@@ -36,12 +64,12 @@ def sync_gmail_labels(tool_context: ToolContext = None) -> dict:
     Returns:
         Dict with labels_synced count and per-label group summary.
     """
-    from ..services.email_provider import get_email_provider
     from ..services.grouping_service import find_or_create_group
 
-    provider = get_email_provider()
+    provider = _get_provider(tool_context)
     labels = provider.list_user_labels()
 
+    user_id = _get_user_id(tool_context)
     results = {}
     for label in labels:
         emails = provider.fetch_emails_by_label(label["id"], max_results=100)
@@ -56,6 +84,7 @@ def sync_gmail_labels(tool_context: ToolContext = None) -> dict:
             description=f"Emails labelled '{label['name']}' in Gmail",
             sender=senders[0] if senders else "",
             thread_id=thread_ids[0] if thread_ids else "",
+            user_id=user_id,
         )
         results[label["name"]] = result
 
@@ -68,11 +97,11 @@ def sync_gmail_labels(tool_context: ToolContext = None) -> dict:
 
 def sync_gmail_labels_if_needed(tool_context: ToolContext = None) -> dict:
     """Sync Gmail labels into the semantic group DB only when needed."""
-    from ..services.email_provider import get_email_provider
     from ..services.firestore_service import list_groups
 
-    provider = get_email_provider()
-    existing_groups = {g["name"].lower() for g in list_groups()}
+    user_id = _get_user_id(tool_context)
+    provider = _get_provider(tool_context)
+    existing_groups = {g["name"].lower() for g in list_groups(user_id)}
     labels = provider.list_user_labels()
     new_labels = [label for label in labels if label["name"].lower() not in existing_groups]
 
@@ -110,7 +139,6 @@ def pre_process_emails(
     """
     import os
 
-    from ..services.email_provider import get_email_provider
     from ..services.embedding_service import get_embedding
     from ..services.firestore_service import get_processed_email_ids
     from ..services.grouping_service import cluster_by_vector, _clean_subject
@@ -118,7 +146,7 @@ def pre_process_emails(
     from ..services.template_service import is_template_email
 
     metrics.reset()
-    provider = get_email_provider()
+    provider = _get_provider(tool_context)
     target = min(max_results, 20)
     emails: list[dict] = []
     page_token = None
@@ -224,9 +252,10 @@ def pre_process_emails(
     # ── Stage 4 fast-path: vector mode (no LLM, no ADK agent) ────────────────
     # When GROUPING_MODE=vector, run pure embedding clustering here and pre-populate
     # grouping_assignments so finalize_email_processing can proceed directly.
+    user_id = _get_user_id(tool_context)
     grouping_assignments: dict[str, dict] = {}
     if to_cluster and grouping_mode == "vector":
-        vector_cls = cluster_by_vector(to_cluster)
+        vector_cls = cluster_by_vector(to_cluster, user_id=user_id)
         grouping_assignments.update(vector_cls)
         logger.info("Stage 4 (vector fast-path): %d emails clustered", len(vector_cls))
 
@@ -274,13 +303,13 @@ def finalize_email_processing(tool_context: ToolContext = None) -> dict:
 
     from ..database import SessionLocal
     from ..models.action_log import ActionLog
-    from ..services.email_provider import get_email_provider
     from ..services.firestore_service import get_processed_email_ids, mark_email_processed, update_group, list_groups
     from ..services.grouping_service import find_or_create_group
     from ..services.metrics_service import metrics
 
     user_id = tool_context.state.get("user_id", "unknown") if tool_context else "unknown"
     dry_run = tool_context.state.get("dry_run", True) if tool_context else True
+    fs_user_id = _get_user_id(tool_context)
 
     emails: list[dict] = tool_context.state.get("_all_emails", []) if tool_context else []
     email_pre_cls: dict = tool_context.state.get("email_pre_cls", {}) if tool_context else {}
@@ -303,8 +332,8 @@ def finalize_email_processing(tool_context: ToolContext = None) -> dict:
         if email["id"] not in email_cls:
             email_cls[email["id"]] = {"group_name": "Uncategorized", "should_archive": False, "archive_reason": ""}
 
-    existing_groups = {g["name"]: g.get("summary", "") for g in list_groups()}
-    provider = get_email_provider()
+    existing_groups = {g["name"]: g.get("summary", "") for g in list_groups(fs_user_id)}
+    provider = _get_provider(tool_context)
 
     # ── Aggregate by group_name ───────────────────────────────────────────────
     groups_to_save: dict[str, dict] = {}
@@ -347,6 +376,7 @@ def finalize_email_processing(tool_context: ToolContext = None) -> dict:
                 sender=senders[0] if senders else "",
                 thread_id=thread_ids[0] if thread_ids else "",
                 embedding=pre_emb,
+                user_id=fs_user_id,
             )
             label_name = name.replace("/", "-").replace("\\", "-").strip()[:100]
 
@@ -529,12 +559,10 @@ def archive_email(
     """
     from ..database import SessionLocal
     from ..models.action_log import ActionLog
-    from ..services.email_provider import get_email_provider
-
     user_id = tool_context.state.get("user_id", "unknown") if tool_context else "unknown"
     dry_run = tool_context.state.get("dry_run", True) if tool_context else True
 
-    provider = get_email_provider()
+    provider = _get_provider(tool_context)
     status = "dry_run" if dry_run else "success"
 
     if not dry_run:

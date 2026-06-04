@@ -1,0 +1,54 @@
+version: "3.9"
+
+# Runs the backend services only.
+# The Chrome extension (frontend/) is built locally with Plasmo and loaded
+# into Chrome as an unpacked extension — it is NOT a Docker service.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: emailagent
+      POSTGRES_USER: emailagent
+      POSTGRES_PASSWORD: emailagent
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U emailagent"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    ports:
+      - "8000:8000"
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://emailagent:emailagent@postgres:5432/emailagent
+      REDIS_URL: redis://redis:6379
+    volumes:
+      - .:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: uvicorn app.server:api --host 0.0.0.0 --port 8000 --reload
+
+volumes:
+  postgres_data:

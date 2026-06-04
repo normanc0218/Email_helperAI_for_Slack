@@ -5,6 +5,9 @@ Three-layer group clustering:
   Layer 3 — AI fallback (gpt-4o-mini, only for ambiguous 0.70-0.95 band)
 
 Also exposes cluster_by_vector() for pure-vector experiment (no LLM).
+
+All Firestore calls are scoped to user_id so groups from different users
+never mix in KNN results.
 """
 import logging
 import math
@@ -41,11 +44,11 @@ def _cosine_similarity(a: list[float], b: list[float]) -> float:
     return dot / (na * nb) if na and nb else 0.0
 
 
-def cluster_by_vector(emails: list[dict]) -> dict[str, dict]:
+def cluster_by_vector(emails: list[dict], user_id: str = "cli") -> dict[str, dict]:
     """Assign group names using only vector similarity — no LLM calls.
 
     Step 1: embed each email's subject + snippet.
-    Step 2: KNN each against existing Firestore groups (threshold 0.75).
+    Step 2: KNN each against existing Firestore groups for this user (threshold 0.75).
     Step 3: greedy clustering for unmatched emails (threshold 0.72).
     Step 4: name new clusters from the first email's cleaned subject.
     """
@@ -63,7 +66,7 @@ def cluster_by_vector(emails: list[dict]) -> dict[str, dict]:
     for email in emails:
         emb = embeddings[email["id"]]
         try:
-            candidate = firestore_service.find_nearest_group(emb, limit=1)
+            candidate = firestore_service.find_nearest_group(emb, user_id, limit=1)
         except Exception:
             candidate = None
 
@@ -120,10 +123,11 @@ def find_or_create_group(
     thread_id: str = "",
     sender: str = "",
     embedding: list[float] | None = None,
+    user_id: str = "cli",
 ) -> dict:
     # Thread short-circuit: same thread always merges regardless of topic similarity
     if thread_id:
-        thread_match = firestore_service.find_group_by_thread_id(thread_id)
+        thread_match = firestore_service.find_group_by_thread_id(thread_id, user_id)
         if thread_match:
             return _merge_into_group(thread_match, email_ids, sender, thread_id)
 
@@ -132,12 +136,12 @@ def find_or_create_group(
 
     candidate = None
     try:
-        candidate = firestore_service.find_nearest_group(embedding, limit=1)
+        candidate = firestore_service.find_nearest_group(embedding, user_id, limit=1)
     except Exception as exc:
         logger.warning("Vector search unavailable (index not ready?): %s — creating new group", exc)
 
     if candidate is None or candidate["similarity"] < 0.70:
-        return _create_group(project_name, email_ids, description, embedding, sender, thread_id)
+        return _create_group(project_name, email_ids, description, embedding, sender, thread_id, user_id)
 
     if candidate["similarity"] > 0.95:
         return _merge_into_group(candidate, email_ids, sender, thread_id)
@@ -158,20 +162,23 @@ def find_or_create_group(
     decision = _ai_decide_group(project_name, description, candidate)
     if decision == "join":
         return _merge_into_group(candidate, email_ids, sender, thread_id)
-    return _create_group(project_name, email_ids, description, embedding, sender, thread_id)
+    return _create_group(project_name, email_ids, description, embedding, sender, thread_id, user_id)
 
 
-def _create_group(project_name, email_ids, description, embedding, sender, thread_id):
-    group_id = firestore_service.save_group({
-        "name": project_name,
-        "description": description,
-        "summary": "",
-        "embedding": embedding,
-        "email_ids": list(email_ids),
-        "senders": [sender] if sender else [],
-        "thread_ids": [thread_id] if thread_id else [],
-        "email_count": len(email_ids),
-    })
+def _create_group(project_name, email_ids, description, embedding, sender, thread_id, user_id):
+    group_id = firestore_service.save_group(
+        {
+            "name": project_name,
+            "description": description,
+            "summary": "",
+            "embedding": embedding,
+            "email_ids": list(email_ids),
+            "senders": [sender] if sender else [],
+            "thread_ids": [thread_id] if thread_id else [],
+            "email_count": len(email_ids),
+        },
+        user_id=user_id,
+    )
     return {"group_id": group_id, "name": project_name, "email_count": len(email_ids), "action": "created"}
 
 

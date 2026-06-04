@@ -1,0 +1,43 @@
+{
+  "name": "email-agent-extension",
+  "displayName": "Email Agent",
+  "version": "0.1.0",
+  "description": "AI-powered Gmail organizer with side panel UI",
+  "private": true,
+  "scripts": {
+    "dev": "plasmo dev",
+    "build": "plasmo build",
+    "package": "plasmo package"
+  },
+  "dependencies": {
+    "plasmo": "0.90.2",
+    "react": "18.2.0",
+    "react-dom": "18.2.0"
+  },
+  "devDependencies": {
+    "@plasmohq/messaging": "0.7.2",
+    "@types/chrome": "0.0.268",
+    "@types/react": "18.2.0",
+    "@types/react-dom": "18.2.0",
+    "autoprefixer": "10.4.19",
+    "postcss": "8.4.38",
+    "tailwindcss": "3.4.3",
+    "typescript": "5.4.5"
+  },
+  "manifest": {
+    "host_permissions": [
+      "http://localhost:8000/*"
+    ],
+    "permissions": [
+      "sidePanel",
+      "storage",
+      "tabs"
+    ],
+    "side_panel": {
+      "default_path": "sidepanel.html"
+    },
+    "action": {
+      "default_title": "Open Email Agent"
+    }
+  }
+}

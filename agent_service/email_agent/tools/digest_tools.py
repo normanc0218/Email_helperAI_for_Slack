@@ -3,13 +3,21 @@ from google.adk.tools import ToolContext
 from ..services.firestore_service import list_groups
 
 
+def _get_user_id(tool_context=None) -> str:
+    if tool_context is not None:
+        pg_id = getattr(tool_context, "state", {}).get("pg_user_id")
+        if pg_id is not None:
+            return str(pg_id)
+    return "cli"
+
+
 def daily_digest(tool_context: ToolContext = None) -> dict:
     """Return structured inbox data for the daily digest.
 
     Returns:
         Dict with group_count, total_emails, and groups list sorted by last activity.
     """
-    groups = list_groups()
+    groups = list_groups(_get_user_id(tool_context))
     if not groups:
         return {"group_count": 0, "total_emails": 0, "groups": []}
 

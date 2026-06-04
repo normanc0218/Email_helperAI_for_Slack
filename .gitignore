@@ -1,20 +1,40 @@
-# Secrets & credentials
+# ── Secrets & credentials ────────────────────────────────────────────────────
 .env
+.env.local
+.env.*.local
 firestore-key.json
 gmail-client-secret.json
 gmail_token.json
+firebasekey.json
+*serviceaccount*.json
+*service-account*.json
+*-key.json
 
-# Databases & sessions
+# ── Databases & sessions ─────────────────────────────────────────────────────
 *.db
 .adk/
 
-# Python cache
+# ── Python ───────────────────────────────────────────────────────────────────
 __pycache__/
 *.pyc
 *.pyo
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
 
-# Misc
+# ── Node / Frontend ──────────────────────────────────────────────────────────
+node_modules/
+frontend/node_modules/
+frontend/build/
+frontend/.plasmo/
+.next/
+*.tsbuildinfo
+
+# ── Misc ─────────────────────────────────────────────────────────────────────
 .python-version
 *output*
 *output
 v1 single agent*
+.DS_Store

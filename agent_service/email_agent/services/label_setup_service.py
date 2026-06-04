@@ -18,7 +18,7 @@ from .firestore_service import save_group, list_groups
 logger = logging.getLogger(__name__)
 
 
-def find_empty_user_labels() -> list[dict]:
+def find_empty_user_labels(user_id: str = "cli") -> list[dict]:
     """Return Gmail user labels that have no emails processed into them yet.
 
     Covers two cases:
@@ -32,7 +32,7 @@ def find_empty_user_labels() -> list[dict]:
     provider = GmailProvider()
     gmail_labels = provider.list_user_labels()
 
-    groups_by_name = {g["name"].lower(): g for g in list_groups()}
+    groups_by_name = {g["name"].lower(): g for g in list_groups(user_id)}
     return [
         lbl for lbl in gmail_labels
         if (
@@ -68,7 +68,7 @@ def generate_label_options(label_name: str) -> list[str]:
     return data.get("options", [])[:3]
 
 
-def seed_group_from_description(label_name: str, description: str) -> dict:
+def seed_group_from_description(label_name: str, description: str, user_id: str = "cli") -> dict:
     """Embed the user's description and save a Firestore group for this label.
 
     The group starts with no emails — the embedding alone is enough for
@@ -77,17 +77,20 @@ def seed_group_from_description(label_name: str, description: str) -> dict:
     full_text = f"{label_name} {description}"
     embedding = get_embedding(full_text)
 
-    group_id = save_group({
-        "name": label_name,
-        "description": description,
-        "summary": "",
-        "embedding": embedding,
-        "email_ids": [],
-        "senders": [],
-        "thread_ids": [],
-        "email_count": 0,
-        "source": "user",
-    })
+    group_id = save_group(
+        {
+            "name": label_name,
+            "description": description,
+            "summary": "",
+            "embedding": embedding,
+            "email_ids": [],
+            "senders": [],
+            "thread_ids": [],
+            "email_count": 0,
+            "source": "user",
+        },
+        user_id=user_id,
+    )
 
     logger.info("Seeded Firestore group '%s' from user description.", label_name)
     return {"group_id": group_id, "name": label_name}
