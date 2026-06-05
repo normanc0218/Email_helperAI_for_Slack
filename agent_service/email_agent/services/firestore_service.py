@@ -233,6 +233,26 @@ def delete_all_summaries() -> int:
     return len(docs)
 
 
+def get_emails_for_group(group_id: str) -> list[dict]:
+    """Return email summaries belonging to a group (used by inbox_query_tools)."""
+    from google.cloud.firestore_v1.base_query import FieldFilter
+    docs = (
+        _db().collection(SUMMARIES)
+        .where(filter=FieldFilter("group_id", "==", group_id))
+        .stream()
+    )
+    return [
+        {
+            "subject": d.get("subject", "(no subject)"),
+            "sender": d.get("sender", ""),
+            "date": d.get("date", ""),
+            "snippet": d.get("snippet", ""),
+        }
+        for doc in docs
+        for d in [doc.to_dict()]
+    ]
+
+
 def _strip_vector(doc: dict) -> dict:
     doc.pop("embedding", None)
     for k, v in doc.items():

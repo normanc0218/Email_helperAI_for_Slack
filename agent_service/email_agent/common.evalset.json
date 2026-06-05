@@ -1,0 +1,291 @@
+{
+  "eval_set_id": "common",
+  "name": "common",
+  "eval_cases": [
+    {
+      "eval_id": "hello_routes_to_casual",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "hi there"
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "Hello! How can I help you with your emails today?"
+              }
+            ],
+            "role": "model"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "args": {
+                  "agent_name": "casual_agent"
+                },
+                "name": "transfer_to_agent"
+              }
+            ]
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "email_agent",
+        "user_id": "user",
+        "state": {
+          "job_type": "CASUAL"
+        }
+      }
+    },
+    {
+      "eval_id": "digest_routes_to_digest_agent",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "show me my email digest"
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "Here is your email digest."
+              }
+            ],
+            "role": "model"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "args": {
+                  "agent_name": "digest_agent"
+                },
+                "name": "transfer_to_agent"
+              }
+            ]
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "email_agent",
+        "user_id": "user",
+        "state": {
+          "job_type": "DIGEST"
+        }
+      }
+    },
+    {
+      "eval_id": "query_routes_to_inbox_query",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "how many emails have I organised?"
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "You have organised emails across several groups."
+              }
+            ],
+            "role": "model"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "args": {
+                  "agent_name": "inbox_query_agent"
+                },
+                "name": "transfer_to_agent"
+              }
+            ]
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "email_agent",
+        "user_id": "user",
+        "state": {
+          "job_type": "QUERY"
+        }
+      }
+    },
+    {
+      "eval_id": "organise_routes_to_full_workflow",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "organise my inbox"
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "Your inbox has been organised."
+              }
+            ],
+            "role": "model"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "args": {
+                  "agent_name": "mailbox_sync_agent"
+                },
+                "name": "transfer_to_agent"
+              },
+              {
+                "args": {
+                  "agent_name": "inbox_processing_agent"
+                },
+                "name": "transfer_to_agent"
+              },
+              {
+                "args": {
+                  "agent_name": "audit_agent"
+                },
+                "name": "transfer_to_agent"
+              }
+            ]
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "email_agent",
+        "user_id": "user",
+        "state": {
+          "job_type": "ORGANIZE"
+        }
+      }
+    },
+    {
+      "eval_id": "explicit_digest",
+      "conversation": [
+        {
+          "invocation_id": "e-57c827f3-43da-4f4f-a435-501e374e183b",
+          "user_content": {
+            "parts": [
+              {
+                "text": "show me my email digest"
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "## 📅 Daily Digest\n\n## 🔴 Needs Response\n- **None**\n\n## 📁 Project Updates\n- **Work** — 3 emails waiting."
+              }
+            ],
+            "role": "model"
+          },
+          "intermediate_data": {
+            "invocation_events": [
+              {
+                "author": "email_agent",
+                "content": {
+                  "parts": [
+                    {
+                      "function_call": {
+                        "id": "call_8xH0xfrPtKXyWpAREDp230Mb",
+                        "args": {
+                          "agent_name": "digest_agent"
+                        },
+                        "name": "transfer_to_agent"
+                      }
+                    }
+                  ],
+                  "role": "model"
+                }
+              },
+              {
+                "author": "email_agent",
+                "content": {
+                  "parts": [
+                    {
+                      "function_response": {
+                        "id": "call_8xH0xfrPtKXyWpAREDp230Mb",
+                        "name": "transfer_to_agent",
+                        "response": {
+                          "result": null
+                        }
+                      }
+                    }
+                  ],
+                  "role": "user"
+                }
+              },
+              {
+                "author": "digest_agent",
+                "content": {
+                  "parts": [
+                    {
+                      "function_call": {
+                        "id": "call_jEhHcLXltfgYI0ktOLfdRcgU",
+                        "args": {},
+                        "name": "daily_digest"
+                      }
+                    }
+                  ],
+                  "role": "model"
+                }
+              },
+              {
+                "author": "digest_agent",
+                "content": {
+                  "parts": [
+                    {
+                      "function_response": {
+                        "id": "call_jEhHcLXltfgYI0ktOLfdRcgU",
+                        "name": "daily_digest",
+                        "response": {
+                          "group_count": 1,
+                          "total_emails": 3,
+                          "groups": [
+                            {
+                              "name": "Work",
+                              "email_count": 3,
+                              "summary": "",
+                              "last_activity": ""
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  ],
+                  "role": "user"
+                }
+              }
+            ]
+          },
+          "creation_timestamp": 1780685968.0355287
+        }
+      ],
+      "session_input": {
+        "app_name": "email_agent",
+        "user_id": "user",
+        "state": {
+          "Company": "",
+          "Topic": ""
+        }
+      },
+      "creation_timestamp": 1780686275.9500308
+    }
+  ]
+}

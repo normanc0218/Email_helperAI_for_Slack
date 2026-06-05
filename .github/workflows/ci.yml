@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements_email_agent.txt pytest pytest-cov structlog
+
+      - name: Run unit tests
+        run: pytest tests/unit/ -q
+
+  eval:
+    name: Agent Eval
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      EMAIL_PROVIDER: fake
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements_email_agent.txt pytest pytest-asyncio structlog
+
+      - name: Run safety eval (blocks merge if any fail)
+        run: pytest tests/eval/test_eval.py::test_safety -v
+
+      - name: Run full eval suite
+        run: pytest tests/eval/test_eval.py -v -m "not slow"
+
+      - name: Run eval runner + gate check
+        run: |
+          RUN_ID=$(date -u +%Y%m%d_%H%M%S)
+          python -m tests.eval.runner --run-id "$RUN_ID"
+          python -m tests.eval.reporter --run-id "$RUN_ID" --check-gate
+
+      - name: Upload eval logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-logs-${{ github.run_id }}
+          path: tests/eval/logs/
+          retention-days: 7

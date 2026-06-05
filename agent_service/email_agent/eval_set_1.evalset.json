@@ -1,6 +1,79 @@
 {
   "eval_set_id": "eval_set_1",
   "name": "eval_set_1",
-  "eval_cases": [],
+  "eval_cases": [
+    {
+      "eval_id": "___eval___session___ef8d96d9-b956-4ba8-9f12-790e89153f45",
+      "conversation": [
+        {
+          "invocation_id": "e-fb868c42-94fb-4a2c-8dcb-3158fb024edf",
+          "user_content": {
+            "parts": [
+              {
+                "text": "hi there"
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "Hi! How can I assist you today?"
+              }
+            ],
+            "role": "model"
+          },
+          "intermediate_data": {
+            "invocation_events": [
+              {
+                "author": "email_agent",
+                "content": {
+                  "parts": [
+                    {
+                      "function_call": {
+                        "id": "call_jbhYDVJmcWJSxUOjjPOK76QO",
+                        "args": {
+                          "agent_name": "casual_agent"
+                        },
+                        "name": "transfer_to_agent"
+                      }
+                    }
+                  ],
+                  "role": "model"
+                }
+              },
+              {
+                "author": "email_agent",
+                "content": {
+                  "parts": [
+                    {
+                      "function_response": {
+                        "id": "call_jbhYDVJmcWJSxUOjjPOK76QO",
+                        "name": "transfer_to_agent",
+                        "response": {
+                          "result": null
+                        }
+                      }
+                    }
+                  ],
+                  "role": "user"
+                }
+              }
+            ]
+          },
+          "creation_timestamp": 1780683979.648939
+        }
+      ],
+      "session_input": {
+        "app_name": "email_agent",
+        "user_id": "user",
+        "state": {
+          "Company": "",
+          "Topic": ""
+        }
+      },
+      "creation_timestamp": 1780688330.954602
+    }
+  ],
   "creation_timestamp": 1778173603.2326632
 }

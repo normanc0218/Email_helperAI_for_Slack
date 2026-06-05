@@ -1,0 +1,79 @@
+{
+  "eval_set_id": "routing_eval",
+  "name": "Routing smoke tests — verify root_agent transfers to the correct sub-agent",
+  "eval_cases": [
+    {
+      "eval_id": "casual_greeting",
+      "conversation": [
+        {
+          "invocation_id": "casual_1",
+          "user_content": {
+            "parts": [{ "text": "hi there" }],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{ "text": "Hello! How can I help you with your emails today?" }],
+            "role": "model"
+          }
+        }
+      ],
+      "creation_timestamp": 0.0,
+      "final_session_state": {}
+    },
+    {
+      "eval_id": "casual_capability_question",
+      "conversation": [
+        {
+          "invocation_id": "casual_2",
+          "user_content": {
+            "parts": [{ "text": "what can you do?" }],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{ "text": "I can organise your inbox, give you a daily digest, undo actions, and answer questions about your emails." }],
+            "role": "model"
+          }
+        }
+      ],
+      "creation_timestamp": 0.0,
+      "final_session_state": {}
+    },
+    {
+      "eval_id": "digest_request",
+      "conversation": [
+        {
+          "invocation_id": "digest_1",
+          "user_content": {
+            "parts": [{ "text": "give me a summary of my recent emails" }],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{ "text": "Here is your email digest. You have emails organised into groups." }],
+            "role": "model"
+          }
+        }
+      ],
+      "creation_timestamp": 0.0,
+      "final_session_state": {}
+    },
+    {
+      "eval_id": "query_inbox_stats",
+      "conversation": [
+        {
+          "invocation_id": "query_1",
+          "user_content": {
+            "parts": [{ "text": "how many emails have been organised?" }],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [{ "text": "You have organised emails across several groups in your inbox." }],
+            "role": "model"
+          }
+        }
+      ],
+      "creation_timestamp": 0.0,
+      "final_session_state": {}
+    }
+  ],
+  "creation_timestamp": 0.0
+}

@@ -39,3 +39,7 @@ aiohttp
 
 # LiteLLM (used by ADK for model calls)
 litellm
+
+# Required by ADK eval (metric_evaluator_registry → multi_turn_task_success_evaluator)
+pandas
+structlog

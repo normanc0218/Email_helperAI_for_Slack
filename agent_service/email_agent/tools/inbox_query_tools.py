@@ -27,7 +27,7 @@ def get_inbox_stats(tool_context: ToolContext = None) -> dict:
     Returns:
         Dict with total_groups, total_emails, and a groups list.
     """
-    from ..services.firestore_service import list_groups, _db, SUMMARIES
+    from ..services.firestore_service import list_groups
 
     groups = list_groups(_get_user_id(tool_context))
     total_emails = sum(g.get("email_count", 0) for g in groups)
@@ -57,8 +57,7 @@ def get_group_emails(group_name: str, tool_context: ToolContext = None) -> dict:
     Returns:
         Dict with group info and list of emails (subject, sender, date, snippet).
     """
-    from ..services.firestore_service import list_groups, _db, SUMMARIES
-    from google.cloud.firestore_v1.base_query import FieldFilter
+    from ..services.firestore_service import list_groups, get_emails_for_group
 
     groups = list_groups(_get_user_id(tool_context))
     name_lower = group_name.lower()
@@ -68,23 +67,7 @@ def get_group_emails(group_name: str, tool_context: ToolContext = None) -> dict:
         return {"error": f"No group found matching '{group_name}'", "groups_available": [g["name"] for g in groups]}
 
     group = matched[0]
-    group_id = group["group_id"]
-
-    docs = (
-        _db().collection(SUMMARIES)
-        .where(filter=FieldFilter("group_id", "==", group_id))
-        .stream()
-    )
-    emails = [
-        {
-            "subject": d.get("subject", "(no subject)"),
-            "sender": d.get("sender", ""),
-            "date": d.get("date", ""),
-            "snippet": d.get("snippet", ""),
-        }
-        for doc in docs
-        for d in [doc.to_dict()]
-    ]
+    emails = get_emails_for_group(group["group_id"])
 
     return {
         "group_name": group.get("name"),
